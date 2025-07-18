@@ -15,7 +15,7 @@ from langchain_core.messages import (
     convert_to_openai_messages,
 )
 from langchain_openai import ChatOpenAI
-from langfuse.langchain import CallbackHandler
+# from langfuse.langchain import CallbackHandler
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import (
     END,
@@ -55,9 +55,10 @@ class LangGraphAgent:
         """Initialize the LangGraph Agent with necessary components."""
         # Use environment-specific LLM model
         self.llm = ChatOpenAI(
-            model=settings.LLM_MODEL,
+            model=settings.OPENAI_MODEL,
             temperature=settings.DEFAULT_LLM_TEMPERATURE,
-            api_key=settings.LLM_API_KEY,
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.OPENAI_API_URL,
             max_tokens=settings.MAX_TOKENS,
             **self._get_model_kwargs(),
         ).bind_tools(tools)
@@ -65,7 +66,7 @@ class LangGraphAgent:
         self._connection_pool: Optional[AsyncConnectionPool] = None
         self._graph: Optional[CompiledStateGraph] = None
 
-        logger.info("llm_initialized", model=settings.LLM_MODEL, environment=settings.ENVIRONMENT.value)
+        logger.info("llm_initialized", model=settings.OPENAI_MODEL, environment=settings.ENVIRONMENT.value)
 
     def _get_model_kwargs(self) -> Dict[str, Any]:
         """Get environment-specific model kwargs.
@@ -143,7 +144,7 @@ class LangGraphAgent:
                     "llm_response_generated",
                     session_id=state.session_id,
                     llm_calls_num=llm_calls_num + 1,
-                    model=settings.LLM_MODEL,
+                    model=settings.OPENAI_MODEL,
                     environment=settings.ENVIRONMENT.value,
                 )
                 return generated_state
@@ -281,7 +282,6 @@ class LangGraphAgent:
             self._graph = await self.create_graph()
         config = {
             "configurable": {"thread_id": session_id},
-            "callbacks": [CallbackHandler()],
             "metadata": {
                 "user_id": user_id,
                 "session_id": session_id,
@@ -313,11 +313,6 @@ class LangGraphAgent:
         """
         config = {
             "configurable": {"thread_id": session_id},
-            "callbacks": [
-                CallbackHandler(
-                    environment=settings.ENVIRONMENT.value, debug=False, user_id=user_id, session_id=session_id
-                )
-            ],
         }
         if self._graph is None:
             self._graph = await self.create_graph()

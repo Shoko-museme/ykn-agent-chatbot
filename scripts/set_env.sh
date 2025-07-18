@@ -82,7 +82,7 @@ else
     echo -e "${GREEN}Database URL:    ${YELLOW}${POSTGRES_URL:-Not set}${NC}"
 fi
 
-echo -e "${GREEN}LLM model:       ${YELLOW}${LLM_MODEL:-Not set}${NC}"
+echo -e "${GREEN}LLM model:       ${YELLOW}${OPENAI_MODEL:-Not set}${NC}"
 echo -e "${GREEN}Log level:       ${YELLOW}${LOG_LEVEL:-Not set}${NC}"
 echo -e "${GREEN}Debug mode:      ${YELLOW}${DEBUG:-Not set}${NC}"
 

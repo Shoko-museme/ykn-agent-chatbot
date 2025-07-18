@@ -1,5 +1,6 @@
 """This file contains the graph utilities for the application."""
 
+import tiktoken
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import trim_messages as _trim_messages
 
@@ -19,6 +20,11 @@ def dump_messages(messages: list[Message]) -> list[dict]:
     return [message.model_dump() for message in messages]
 
 
+def _get_token_count(messages: list[dict], encoding: tiktoken.Encoding) -> int:
+    """Get the token count of a list of messages."""
+    return sum(len(encoding.encode(str(item))) for item in messages)
+
+
 def prepare_messages(messages: list[Message], llm: BaseChatModel, system_prompt: str) -> list[Message]:
     """Prepare the messages for the LLM.
 
@@ -30,10 +36,19 @@ def prepare_messages(messages: list[Message], llm: BaseChatModel, system_prompt:
     Returns:
         list[Message]: The prepared messages.
     """
+    # Get the encoding for the model
+    try:
+        encoding = tiktoken.encoding_for_model(llm.model_name)
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")
+
+    # Create a token counter function
+    token_counter = lambda msgs: _get_token_count(msgs, encoding)
+
     trimmed_messages = _trim_messages(
         dump_messages(messages),
         strategy="last",
-        token_counter=llm,
+        token_counter=token_counter,
         max_tokens=settings.MAX_TOKENS,
         start_on="human",
         include_system=False,
