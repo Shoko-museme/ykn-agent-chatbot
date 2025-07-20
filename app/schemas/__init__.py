@@ -8,6 +8,13 @@ from app.schemas.chat import (
     StreamResponse,
 )
 from app.schemas.graph import GraphState
+from app.schemas.task import (
+    FormExtractionRequest,
+    FormExtractionSyncResponse,
+    FormExtractionAsyncResponse,
+    FormExtractionTaskStatus,
+    FormExtractionError,
+)
 
 __all__ = [
     "Token",
@@ -16,4 +23,9 @@ __all__ = [
     "Message",
     "StreamResponse",
     "GraphState",
+    "FormExtractionRequest",
+    "FormExtractionSyncResponse",
+    "FormExtractionAsyncResponse",
+    "FormExtractionTaskStatus",
+    "FormExtractionError",
 ]

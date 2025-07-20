@@ -150,7 +150,18 @@ class Settings:
         # OpenAI Configuration
         self.OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-        self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1")
+
+        # --- DEBUG START ---
+        print("--- DEBUG: OpenAI Config ---")
+        print(f"Loaded ENV file: {ENV_FILE}")
+        print(f"OPENAI_API_URL: {self.OPENAI_API_URL}")
+        print(
+            f"OPENAI_API_KEY loaded: {'Exists and ends with ...' + self.OPENAI_API_KEY[-4:] if self.OPENAI_API_KEY else 'Not set or empty'}"
+        )
+        print(f"OPENAI_MODEL: {self.OPENAI_MODEL}")
+        print("--- DEBUG END ---")
+
         # Backwards compatibility for legacy variable names
         self.LLM_API_KEY = self.OPENAI_API_KEY
         self.LLM_MODEL = self.OPENAI_MODEL
