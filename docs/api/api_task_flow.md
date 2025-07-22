@@ -131,7 +131,3 @@ sequenceDiagram
 | 500 | `TASK_INTERNAL_ERROR` | 服务内部错误 |
 
 ---
-
-## 5. 备注
-
-TaskAPI 与现有系统的 JWT 认证机制完全复用，无需额外配置。
