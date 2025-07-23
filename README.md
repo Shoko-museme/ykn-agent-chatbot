@@ -18,6 +18,7 @@ A production-ready FastAPI template for building AI agent applications with Lang
 - **Security**
 
   - JWT-based authentication
+  - Protected user registration with authentication token
   - Session management
   - Input sanitization
   - CORS configuration
@@ -186,6 +187,50 @@ Each report includes:
 - High-level statistics (total trace count, success rate, etc.)
 - Per-metric performance metrics
 - Detailed trace-level information for debugging
+
+## 🔐 Authentication & Registration
+
+### User Registration
+
+User registration requires authentication to prevent unauthorized signups. You need to provide a registration token in the `X-Auth-Token` header.
+
+#### Setting up Registration Token
+
+1. **Environment Variable**: Set `REGISTRATION_AUTH_TOKEN` in your environment file
+2. **Default Token**: If not set, the system uses the default token: `D3zF6r7l0b3Mmna7dhY1_YD10TcK85nUMRfKjXmRUGw`
+
+#### Registration API Usage
+
+```bash
+# Register a new user
+curl -X POST "http://localhost:8000/api/v1/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Token: D3zF6r7l0b3Mmna7dhY1_YD10TcK85nUMRfKjXmRUGw" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecureP@ssw0rd123!"
+  }'
+```
+
+#### Password Requirements
+
+- At least 8 characters long
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+- At least one special character
+
+#### Login
+
+```bash
+# Login with registered user (email must be lowercase)
+curl -X POST "http://localhost:8000/api/v1/auth/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=user@example.com" \
+  --data-urlencode "password=SecureP@ssw0rd123!"
+```
+
+**Important**: During registration, emails are converted to lowercase. When logging in, make sure to use the lowercase version of your email address.
 
 ## 🔧 Configuration
 

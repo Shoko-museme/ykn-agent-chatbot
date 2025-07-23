@@ -174,6 +174,12 @@ class Settings:
         self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
         self.JWT_ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_DAYS", "30"))
 
+        # Registration Authentication Token
+        # NOTE: This token is required for user registration to prevent unauthorized signups
+        # Set REGISTRATION_AUTH_TOKEN in your environment variables
+        # Generated token: D3zF6r7l0b3Mmna7dhY1_YD10TcK85nUMRfKjXmRUGw
+        self.REGISTRATION_AUTH_TOKEN = os.getenv("REGISTRATION_AUTH_TOKEN", "D3zF6r7l0b3Mmna7dhY1_YD10TcK85nUMRfKjXmRUGw")
+
         # Logging Configuration
         self.LOG_DIR = Path(os.getenv("LOG_DIR", "logs"))
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

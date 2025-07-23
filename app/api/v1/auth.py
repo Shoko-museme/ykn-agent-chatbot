@@ -144,42 +144,9 @@ async def get_current_session(
         )
 
 
-@router.post("/register", response_model=UserResponse)
-@limiter.limit(settings.RATE_LIMIT_ENDPOINTS["register"][0])
-async def register_user(request: Request, user_data: UserCreate):
-    """Register a new user.
-
-    Args:
-        request: The FastAPI request object for rate limiting.
-        user_data: User registration data
-
-    Returns:
-        UserResponse: The created user info
-    """
-    try:
-        # Sanitize email
-        sanitized_email = sanitize_email(user_data.email)
-
-        # Extract and validate password
-        password = user_data.password.get_secret_value()
-        validate_password_strength(password)
-
-        # Check if user exists
-        if await db_service.get_user_by_email(sanitized_email):
-            raise HTTPException(status_code=400, detail="Email already registered")
-
-        # Create user
-        user = await db_service.create_user(email=sanitized_email, password=User.hash_password(password))
-
-        # Create access token
-        token = create_access_token(str(user.id))
-
-        return UserResponse(id=user.id, email=user.email, token=token)
-    except ValueError as ve:
-        logger.error("user_registration_validation_failed", error=str(ve), exc_info=True)
-        raise HTTPException(status_code=422, detail=str(ve))
-
-
+# NOTE: Registration stores emails in lowercase via `sanitize_email()`.  
+#       Users MUST supply their email in lowercase here; otherwise the lookup
+#       will fail and the API will respond with "Incorrect email or password".
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(settings.RATE_LIMIT_ENDPOINTS["login"][0])
 async def login(
@@ -224,6 +191,64 @@ async def login(
         return TokenResponse(access_token=token.access_token, token_type="bearer", expires_at=token.expires_at)
     except ValueError as ve:
         logger.error("login_validation_failed", error=str(ve), exc_info=True)
+        raise HTTPException(status_code=422, detail=str(ve))
+
+
+@router.post("/register", response_model=UserResponse)
+@limiter.limit(settings.RATE_LIMIT_ENDPOINTS["register"][0])
+async def register_user(request: Request, user_data: UserCreate):
+    """Register a new user.
+
+    Args:
+        request: The FastAPI request object for rate limiting.
+        user_data: User registration data
+
+    Returns:
+        UserResponse: The created user info
+        
+    Raises:
+        HTTPException: If auth token is missing/invalid or other validation errors
+        
+    Note:
+        Requires X-Auth-Token header with valid registration token.
+        Example: curl -H "X-Auth-Token: your_token_here" ...
+    """
+    try:
+        # Verify registration auth token
+        auth_token = request.headers.get("X-Auth-Token")
+        if not auth_token:
+            raise HTTPException(
+                status_code=401,
+                detail="Registration requires authentication. Please provide X-Auth-Token header."
+            )
+        
+        if auth_token != settings.REGISTRATION_AUTH_TOKEN:
+            logger.warning("invalid_registration_token_attempt", provided_token=auth_token[:10] + "...")
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid registration token"
+            )
+
+        # Sanitize email
+        sanitized_email = sanitize_email(user_data.email)
+
+        # Extract and validate password
+        password = user_data.password.get_secret_value()
+        validate_password_strength(password)
+
+        # Check if user exists
+        if await db_service.get_user_by_email(sanitized_email):
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Create user
+        user = await db_service.create_user(email=sanitized_email, password=User.hash_password(password))
+
+        # Create access token
+        token = create_access_token(str(user.id))
+
+        return UserResponse(id=user.id, email=user.email, token=token)
+    except ValueError as ve:
+        logger.error("register_validation_failed", error=str(ve), exc_info=True)
         raise HTTPException(status_code=422, detail=str(ve))
 
 
