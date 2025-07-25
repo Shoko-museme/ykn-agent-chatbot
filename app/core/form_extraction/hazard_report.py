@@ -14,6 +14,11 @@ from app.core.form_extraction.base import BaseExecutor
 from app.core.logging import logger
 
 
+def get_current_date() -> str:
+    """Get current date in YYYYMMDD format."""
+    return datetime.now().strftime("%Y%m%d")
+
+
 class HazardReportModel(BaseModel):
     """Pydantic model for hazard report form validation.
     
@@ -23,11 +28,11 @@ class HazardReportModel(BaseModel):
     
     # Required fields
     underCheckOrg: str = Field(..., description="被检查部门")
-    checkDate: str = Field(..., description="检查日期 (YYYYMMDD)")
+    checkDate: str = Field(default_factory=get_current_date, description="检查日期 (YYYYMMDD)")
     hiddenTroubleLevel: int = Field(default=7, description="隐患级别")
     checkType: int = Field(default=1, description="检查类型")
-    hiddenTroubleType: int = Field(..., description="隐患类别")
-    illegalType: int = Field(..., description="隐患标签")
+    hiddenTroubleType: Optional[int] = Field(default=None, description="隐患类别")
+    illegalType: Optional[int] = Field(default=None, description="隐患标签")
     
     # Optional fields
     checkMoney: Optional[float] = Field(default=None, description="考核金额(元)")
@@ -37,20 +42,17 @@ class HazardReportModel(BaseModel):
     
     @field_validator("checkDate")
     @classmethod
-    def validate_check_date(cls, v: str) -> str:
+    def validate_check_date(cls, v: Optional[str]) -> str:
         """Validate and normalize check date.
         
         Args:
             v: Date string to validate
             
         Returns:
-            str: Normalized date string in YYYYMMDD format
-            
-        Raises:
-            ValueError: If date format is invalid
+            str: Normalized date string in YYYYMMDD format or current date if invalid
         """
         if not v:
-            raise ValueError("checkDate is required")
+            return get_current_date()
         
         # Remove any non-digit characters
         date_digits = re.sub(r'\D', '', v)
@@ -63,13 +65,15 @@ class HazardReportModel(BaseModel):
             # Assume YYMMDD format, add 20 prefix
             date_digits = f"20{date_digits}"
         elif len(date_digits) != 8:
-            raise ValueError(f"Invalid date format: {v}")
+            logger.warning("invalid_checkDate_format", value=v)
+            return get_current_date()
         
         # Validate the date
         try:
             datetime.strptime(date_digits, "%Y%m%d")
         except ValueError:
-            raise ValueError(f"Invalid date: {v}")
+            logger.warning("invalid_checkDate_value", value=v)
+            return get_current_date()
         
         return date_digits
     
@@ -89,7 +93,8 @@ class HazardReportModel(BaseModel):
         """
         valid_levels = {5, 6, 7, 8}
         if v not in valid_levels:
-            raise ValueError(f"hiddenTroubleLevel must be one of {valid_levels}")
+            logger.warning("invalid_hiddenTroubleLevel", value=v)
+            return 7
         return v
     
     @field_validator("checkType")
@@ -108,12 +113,13 @@ class HazardReportModel(BaseModel):
         """
         valid_types = {1, 3, 4, 5, 6, 8}
         if v not in valid_types:
-            raise ValueError(f"checkType must be one of {valid_types}")
+            logger.warning("invalid_checkType", value=v)
+            return 1
         return v
     
     @field_validator("hiddenTroubleType")
     @classmethod
-    def validate_hidden_trouble_type(cls, v: int) -> int:
+    def validate_hidden_trouble_type(cls, v: Optional[int]) -> Optional[int]:
         """Validate hidden trouble type.
         
         Args:
@@ -126,13 +132,14 @@ class HazardReportModel(BaseModel):
             ValueError: If type is not valid
         """
         valid_types = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
-        if v not in valid_types:
-            raise ValueError(f"hiddenTroubleType must be one of {valid_types}")
+        if v is not None and v not in valid_types:
+            logger.warning("invalid_hiddenTroubleType", value=v)
+            return None
         return v
     
     @field_validator("illegalType")
     @classmethod
-    def validate_illegal_type(cls, v: int) -> int:
+    def validate_illegal_type(cls, v: Optional[int]) -> Optional[int]:
         """Validate illegal type.
         
         Args:
@@ -145,8 +152,9 @@ class HazardReportModel(BaseModel):
             ValueError: If type is not valid
         """
         valid_types = {1, 2, 3, 4}
-        if v not in valid_types:
-            raise ValueError(f"illegalType must be one of {valid_types}")
+        if v is not None and v not in valid_types:
+            logger.warning("invalid_illegalType", value=v)
+            return None
         return v
     
     @field_validator("specialProject")
@@ -166,7 +174,8 @@ class HazardReportModel(BaseModel):
         if v is not None:
             valid_projects = {1, 2}
             if v not in valid_projects:
-                raise ValueError(f"specialProject must be one of {valid_projects}")
+                logger.warning("invalid_specialProject", value=v)
+                return None
         return v
     
     @field_validator("checkLeader")
@@ -184,9 +193,10 @@ class HazardReportModel(BaseModel):
             ValueError: If leader is not valid
         """
         if v is not None:
-            valid_leaders = {1, 2}
+            valid_leaders = {1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13, 14}
             if v not in valid_leaders:
-                raise ValueError(f"checkLeader must be one of {valid_leaders}")
+                logger.warning("invalid_checkLeader", value=v)
+                return None
         return v
     
     @model_validator(mode='after')
@@ -201,11 +211,10 @@ class HazardReportModel(BaseModel):
         """
         # specialProject is required when checkType == 5
         if self.checkType == 5 and self.specialProject is None:
-            raise ValueError("specialProject is required when checkType is 5 (专项整治三年行动)")
-        
+            logger.warning("missing_specialProject", checkType=self.checkType)
         # checkLeader is required when checkType == 8
         if self.checkType == 8 and self.checkLeader is None:
-            raise ValueError("checkLeader is required when checkType is 8 (领导带队检查)")
+            logger.warning("missing_checkLeader", checkType=self.checkType)
         
         return self
 
