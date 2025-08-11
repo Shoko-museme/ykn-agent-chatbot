@@ -37,7 +37,6 @@ class HazardReportModel(BaseModel):
     # Optional fields
     checkMoney: Optional[float] = Field(default=None, description="考核金额(元)")
     checkScore: Optional[int] = Field(default=None, description="考核分数")
-    specialProject: Optional[int] = Field(default=None, description="专题专项")
     checkLeader: Optional[int] = Field(default=None, description="带队领导")
     
     @field_validator("checkDate")
@@ -131,7 +130,7 @@ class HazardReportModel(BaseModel):
         Raises:
             ValueError: If type is not valid
         """
-        valid_types = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
+        valid_types = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
         if v is not None and v not in valid_types:
             logger.warning("invalid_hiddenTroubleType", value=v)
             return None
@@ -155,27 +154,6 @@ class HazardReportModel(BaseModel):
         if v is not None and v not in valid_types:
             logger.warning("invalid_illegalType", value=v)
             return None
-        return v
-    
-    @field_validator("specialProject")
-    @classmethod
-    def validate_special_project(cls, v: Optional[int]) -> Optional[int]:
-        """Validate special project.
-        
-        Args:
-            v: Special project
-            
-        Returns:
-            Optional[int]: Validated special project
-            
-        Raises:
-            ValueError: If project is not valid
-        """
-        if v is not None:
-            valid_projects = {1, 2}
-            if v not in valid_projects:
-                logger.warning("invalid_specialProject", value=v)
-                return None
         return v
     
     @field_validator("checkLeader")
@@ -209,9 +187,6 @@ class HazardReportModel(BaseModel):
         Raises:
             ValueError: If conditional validation fails
         """
-        # specialProject is required when checkType == 5
-        if self.checkType == 5 and self.specialProject is None:
-            logger.warning("missing_specialProject", checkType=self.checkType)
         # checkLeader is required when checkType == 8
         if self.checkType == 8 and self.checkLeader is None:
             logger.warning("missing_checkLeader", checkType=self.checkType)
@@ -251,7 +226,7 @@ class HazardReportExecutor(BaseExecutor):
         result = data.copy()
         
         # Convert empty strings to None for optional fields
-        optional_fields = ["checkMoney", "checkScore", "specialProject", "checkLeader"]
+        optional_fields = ["checkMoney", "checkScore", "checkLeader"]
         for field in optional_fields:
             if result.get(field) == "":
                 result[field] = None

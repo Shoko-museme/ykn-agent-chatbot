@@ -27,6 +27,56 @@
 
 在与 Agent 开始聊天之前，客户端必须先获取一个代表特定聊天会话（Session）的访问令牌 (`access_token`)。
 
+#### 步骤 0: 注册账号（可选）
+
+如果你还没有账号，需要先完成注册。为防止未授权注册，注册接口需要在请求头中提供 `X-Auth-Token`（可通过环境变量 `REGISTRATION_AUTH_TOKEN` 配置，或向管理员索取）。
+
+- **Endpoint**: `POST /api/v1/auth/register`
+- **Headers**:
+  ```
+  Content-Type: application/json
+  X-Auth-Token: <your_registration_token>
+  ```
+- **Request Body** (`application/json`):
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "SecureP@ssw0rd123!"
+  }
+  ```
+- **Response** (`200 OK`):
+  ```json
+  {
+    "id": 1,
+    "email": "user@example.com",
+    "token": {
+      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "token_type": "bearer",
+      "expires_at": "2025-07-19T12:00:00Z"
+    }
+  }
+  ```
+- **说明**:
+  - 必须提供有效的 `X-Auth-Token`，否则会返回 `401/403`。
+  - 密码需满足强度要求：至少 8 位，包含大小写字母、数字与特殊字符。
+  - 注册时系统会将邮箱统一转换为小写；登录时请使用小写邮箱。
+
+##### 测试环境信息（development）
+
+- **测试环境 X-Auth-Token**: `D3zF6r7l0b3Mmna7dhY1_YD10TcK85nUMRfKjXmRUGw`
+- **测试账号**:
+  - Email: `test.user@example.com`
+  - Password: `SecureP@ssw0rd123!`
+
+注册完成后，可用以下命令登录获取用户令牌：
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/auth/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=test.user@example.com" \
+  --data-urlencode "password=SecureP@ssw0rd123!"
+```
+
 #### 步骤 1: 用户登录 (获取用户令牌)
 
 客户端首先需要使用用户名和密码进行登录，以获取一个代表该用户的令牌。
