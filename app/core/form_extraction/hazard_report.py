@@ -224,6 +224,28 @@ class HazardReportExecutor(BaseExecutor):
         """
         # Create a copy to avoid modifying the original
         result = data.copy()
+
+        # Heuristic override for checkType based on utterance text.
+        # Priority: if model picked 8 (领导带队检查), keep 8; else 专项(3) > 月度(4) > 季度(6) > 默认(1)
+        try:
+            utterance: str = getattr(self, "_utterance", "") or ""
+            normalized = utterance.lower()
+        except Exception:
+            normalized = ""
+
+        # Only override when model did NOT choose 8
+        if result.get("checkType") != 8:
+            # 专项优先
+            if "专项" in utterance:
+                result["checkType"] = 3
+            # 月度次之
+            elif "月度" in utterance:
+                result["checkType"] = 4
+            # 季度再次
+            elif "季度" in utterance:
+                result["checkType"] = 6
+            else:
+                result["checkType"] = 1
         
         # Convert empty strings to None for optional fields
         optional_fields = ["checkMoney", "checkScore", "checkLeader"]
@@ -250,7 +272,8 @@ class HazardReportExecutor(BaseExecutor):
             original_fields=len(data),
             processed_fields=len(result),
             check_date=result.get("checkDate"),
-            check_org=result.get("underCheckOrg")
+            check_org=result.get("underCheckOrg"),
+            check_type=result.get("checkType")
         )
         
         return result 

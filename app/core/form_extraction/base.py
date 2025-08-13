@@ -245,6 +245,12 @@ class BaseExecutor(ABC):
             return state
             
         try:
+            # Expose utterance to executor for rule-based post processing needs
+            try:
+                setattr(self, "_utterance", state.get("utterance"))
+            except Exception:
+                pass
+
             result = self.post_process(state["validated_data"])
             state["result"] = result
             logger.info("post_processing_complete", form_code=state["form_code"])
