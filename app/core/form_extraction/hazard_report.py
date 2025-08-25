@@ -4,13 +4,20 @@ This module implements the specific executor and validation model
 for the hazard_report form type.
 """
 
+import json
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from jinja2 import Environment, FileSystemLoader
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from pydantic import (BaseModel, Field, ValidationError, field_validator,
+                    model_validator)
 
-from app.core.form_extraction.base import BaseExecutor
+from app.core.config import settings
+from app.core.form_extraction.base import BaseExecutor, FormExtractionError
 from app.core.logging import logger
 
 
@@ -42,32 +49,21 @@ class HazardReportModel(BaseModel):
     @field_validator("checkDate")
     @classmethod
     def validate_check_date(cls, v: Optional[str]) -> str:
-        """Validate and normalize check date.
-        
-        Args:
-            v: Date string to validate
-            
-        Returns:
-            str: Normalized date string in YYYYMMDD format or current date if invalid
-        """
+        """Validate and normalize check date."""
         if not v:
             return get_current_date()
         
-        # Remove any non-digit characters
         date_digits = re.sub(r'\D', '', v)
         
-        # If only month and day provided, add current year
         if len(date_digits) == 4:
             current_year = datetime.now().year
             date_digits = f"{current_year}{date_digits}"
         elif len(date_digits) == 6:
-            # Assume YYMMDD format, add 20 prefix
             date_digits = f"20{date_digits}"
         elif len(date_digits) != 8:
             logger.warning("invalid_checkDate_format", value=v)
             return get_current_date()
         
-        # Validate the date
         try:
             datetime.strptime(date_digits, "%Y%m%d")
         except ValueError:
@@ -79,17 +75,7 @@ class HazardReportModel(BaseModel):
     @field_validator("hiddenTroubleLevel")
     @classmethod
     def validate_hidden_trouble_level(cls, v: int) -> int:
-        """Validate hidden trouble level.
-        
-        Args:
-            v: Hidden trouble level
-            
-        Returns:
-            int: Validated hidden trouble level
-            
-        Raises:
-            ValueError: If level is not valid
-        """
+        """Validate hidden trouble level."""
         valid_levels = {5, 6, 7, 8}
         if v not in valid_levels:
             logger.warning("invalid_hiddenTroubleLevel", value=v)
@@ -99,17 +85,7 @@ class HazardReportModel(BaseModel):
     @field_validator("checkType")
     @classmethod
     def validate_check_type(cls, v: int) -> int:
-        """Validate check type.
-        
-        Args:
-            v: Check type
-            
-        Returns:
-            int: Validated check type
-            
-        Raises:
-            ValueError: If type is not valid
-        """
+        """Validate check type."""
         valid_types = {1, 3, 4, 5, 6, 8}
         if v not in valid_types:
             logger.warning("invalid_checkType", value=v)
@@ -119,17 +95,7 @@ class HazardReportModel(BaseModel):
     @field_validator("hiddenTroubleType")
     @classmethod
     def validate_hidden_trouble_type(cls, v: Optional[int]) -> Optional[int]:
-        """Validate hidden trouble type.
-        
-        Args:
-            v: Hidden trouble type
-            
-        Returns:
-            int: Validated hidden trouble type
-            
-        Raises:
-            ValueError: If type is not valid
-        """
+        """Validate hidden trouble type."""
         valid_types = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
         if v is not None and v not in valid_types:
             logger.warning("invalid_hiddenTroubleType", value=v)
@@ -139,17 +105,7 @@ class HazardReportModel(BaseModel):
     @field_validator("illegalType")
     @classmethod
     def validate_illegal_type(cls, v: Optional[int]) -> Optional[int]:
-        """Validate illegal type.
-        
-        Args:
-            v: Illegal type
-            
-        Returns:
-            int: Validated illegal type
-            
-        Raises:
-            ValueError: If type is not valid
-        """
+        """Validate illegal type."""
         valid_types = {1, 2, 3, 4}
         if v is not None and v not in valid_types:
             logger.warning("invalid_illegalType", value=v)
@@ -159,17 +115,7 @@ class HazardReportModel(BaseModel):
     @field_validator("checkLeader")
     @classmethod
     def validate_check_leader(cls, v: Optional[int]) -> Optional[int]:
-        """Validate check leader.
-        
-        Args:
-            v: Check leader
-            
-        Returns:
-            Optional[int]: Validated check leader
-            
-        Raises:
-            ValueError: If leader is not valid
-        """
+        """Validate check leader."""
         if v is not None:
             valid_leaders = {1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13, 14}
             if v not in valid_leaders:
@@ -179,81 +125,88 @@ class HazardReportModel(BaseModel):
     
     @model_validator(mode='after')
     def validate_conditional_fields(self) -> 'HazardReportModel':
-        """Validate conditional required fields.
-        
-        Returns:
-            HazardReportModel: Validated model instance
-            
-        Raises:
-            ValueError: If conditional validation fails
-        """
-        # checkLeader is required when checkType == 8
+        """Validate conditional required fields."""
         if self.checkType == 8 and self.checkLeader is None:
             logger.warning("missing_checkLeader", checkType=self.checkType)
-        
         return self
 
 
 class HazardReportExecutor(BaseExecutor):
     """Executor for hazard report form extraction."""
-    
-    def get_template_name(self) -> str:
-        """Get the template file name for hazard report.
-        
-        Returns:
-            str: Template file name
-        """
-        return "hazard_report.jinja2"
-    
-    def get_validation_model(self) -> type[BaseModel]:
-        """Get the Pydantic model for validation.
-        
-        Returns:
-            type[BaseModel]: HazardReportModel class
-        """
-        return HazardReportModel
-    
-    def post_process(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Post-process the validated hazard report data.
-        
-        Args:
-            data: Validated data from HazardReportModel
-            
-        Returns:
-            Dict[str, Any]: Post-processed data
-        """
-        # Create a copy to avoid modifying the original
-        result = data.copy()
 
-        # Heuristic override for checkType based on utterance text.
-        # Priority: if model picked 8 (领导带队检查), keep 8; else 专项(3) > 月度(4) > 季度(6) > 默认(1)
+    def __init__(self):
+        """Initialize the executor."""
+        self.llm = ChatOpenAI(
+            model=settings.OPENAI_MODEL,
+            temperature=settings.DEFAULT_LLM_TEMPERATURE,
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.OPENAI_API_URL,
+            max_tokens=settings.MAX_TOKENS,
+        )
+        self.template_env = Environment(
+            loader=FileSystemLoader(Path(__file__).parent / "templates")
+        )
+        self.pydantic_model = HazardReportModel
         try:
-            utterance: str = getattr(self, "_utterance", "") or ""
-            normalized = utterance.lower()
-        except Exception:
-            normalized = ""
+            self.template = self.template_env.get_template("hazard_report.jinja2")
+        except Exception as e:
+            logger.error("template_load_error", template="hazard_report.jinja2", error=str(e))
+            raise FormExtractionError(
+                f"Template hazard_report.jinja2 not found: {e}",
+                error_code="TASK_INTERNAL_ERROR"
+            )
 
-        # Only override when model did NOT choose 8
-        if result.get("checkType") != 8:
-            # 专项优先
-            if "专项" in utterance:
-                result["checkType"] = 3
-            # 月度次之
-            elif "月度" in utterance:
-                result["checkType"] = 4
-            # 季度再次
-            elif "季度" in utterance:
-                result["checkType"] = 6
-            else:
-                result["checkType"] = 1
+    def _generate_prompt(self, utterance: str) -> str:
+        """Generates the prompt for the LLM."""
+        return self.template.render(user_input=utterance)
+
+    def _call_llm(self, prompt: str) -> str:
+        """Calls the language model and returns the raw response."""
+        try:
+            messages = [HumanMessage(content=prompt)]
+            response = self.llm.invoke(messages)
+            content = response.content if isinstance(response, AIMessage) else str(response)
+            logger.info("llm_response_received", response_length=len(content))
+            return content
+        except Exception as e:
+            logger.error("llm_error", error=str(e))
+            raise FormExtractionError(f"LLM call failed: {e}", error_code="TASK_LLM_INNER_ERROR")
+
+    def _clean_and_parse_json(self, raw_json: str) -> dict:
+        """Cleans and parses the JSON string from the LLM."""
+        cleaned_str = raw_json.strip()
         
-        # Convert empty strings to None for optional fields
+        match = re.search(r"```(json)?(.*)```", cleaned_str, re.DOTALL)
+        if match:
+            cleaned_str = match.group(2).strip()
+
+        try:
+            data = json.loads(cleaned_str)
+            logger.info("json_parsed_successfully", fields_count=len(data))
+            return data
+        except json.JSONDecodeError as e:
+            logger.error("json_parse_error", error=str(e), raw_json=raw_json)
+            raise FormExtractionError(f"LLM output is not valid JSON: {e}", error_code="TASK_INVALID_RESPONSE")
+
+    def _post_process(self, data: dict, utterance: str) -> dict:
+        """Applies post-processing rules to the validated data."""
+        result = data.copy()
+        normalized = utterance.lower()
+
+        if result.get("checkType") != 8:
+            if "专项" in normalized:
+                result["checkType"] = 3
+            elif "月度" in normalized:
+                result["checkType"] = 4
+            elif "季度" in normalized:
+                result["checkType"] = 6
+            # No else, keep the model's prediction if no keyword matches
+
         optional_fields = ["checkMoney", "checkScore", "checkLeader"]
         for field in optional_fields:
             if result.get(field) == "":
                 result[field] = None
         
-        # Ensure numeric fields are properly typed
         if result.get("checkMoney") is not None:
             try:
                 result["checkMoney"] = float(result["checkMoney"])
@@ -266,14 +219,35 @@ class HazardReportExecutor(BaseExecutor):
             except (ValueError, TypeError):
                 result["checkScore"] = None
         
-        # Log the post-processing
-        logger.info(
-            "hazard_report_post_processed",
-            original_fields=len(data),
-            processed_fields=len(result),
-            check_date=result.get("checkDate"),
-            check_org=result.get("underCheckOrg"),
-            check_type=result.get("checkType")
-        )
+        logger.info("post_processing_complete")
+        return result
+
+    def execute(self, utterance: str) -> dict:
+        """Executes the full form extraction and validation pipeline."""
+        logger.info("starting_form_extraction", form_code="hazard_report")
+        try:
+            prompt = self._generate_prompt(utterance)
+            raw_json_str = self._call_llm(prompt)
+            data = self._clean_and_parse_json(raw_json_str)
+            
+            validated_data = self.pydantic_model.model_validate(data)
+            logger.info("validation_successful")
+            
+            final_data = self._post_process(validated_data.model_dump(), utterance)
+            
+            logger.info("form_extraction_succeeded", form_code="hazard_report")
+            return final_data
+
+        except ValidationError as e:
+            error_details = e.errors()[0]
+            field, msg = error_details['loc'][0], error_details['msg']
+            logger.error("validation_error", field=field, message=msg)
+            raise FormExtractionError(f"Validation failed on field '{field}': {msg}", error_code="TASK_VALIDATION_ERROR")
         
-        return result 
+        except FormExtractionError as e:
+            logger.error("form_extraction_failed", error_code=e.error_code, message=e.message)
+            raise
+        
+        except Exception as e:
+            logger.error("form_extraction_unexpected_error", error=str(e))
+            raise FormExtractionError(f"An unexpected internal error occurred: {e}", error_code="TASK_INTERNAL_ERROR")

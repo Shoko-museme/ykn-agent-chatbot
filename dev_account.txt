@@ -1,0 +1,2 @@
+email: dev.user@example.com
+password: SecureP@ssw0rd123!
